@@ -82,6 +82,7 @@ Modeling the noise of a thermal-noise limited ADC’s is straightforward. If the
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # Model Gaussian Noise
     offset = 0.000
     rmsnoise = 0.42e-6 # AD7124 noise,
@@ -96,6 +97,7 @@ The AD7124 device driver falls under the industry-standard Industrial Input-Outp
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
    # AD7124-8 Basic Data Capture
 
   import adi # pyadi-iio library
@@ -213,6 +215,7 @@ The AD7124-8 Filter Response code block will set the ADALM2000’s waveform gene
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # AD7124-8 Filter Response
     freqs = np.linspace(1, 20, 10, endpoint=True)
     for freq in freqs:
@@ -310,6 +313,7 @@ And finally, the frequency response can be calculalted using NumPy’s freqz fun
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # AD7124 Frequency Response 
 
     f0 = 19200
@@ -383,6 +387,7 @@ While Scopy is useful for single, visual measurements, the functionality can be 
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # Noise Source Measurement
     navgs = 32 # Avg. 32 periodograms to smooth out data
     ns = 2**16
@@ -435,6 +440,7 @@ In order to determine the impact of a given band of noise on a signal (signal to
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # Integrate Power Spectral Density 
     # Function to integrate a power-spectral-density
     # The last element is the total integrated noise
@@ -489,6 +495,7 @@ This function can be verified by controlling one ADALM2000 through a libm2k scri
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # Push Noise Time-series to ADALM2000
     n = 8192
 
@@ -541,6 +548,7 @@ The ENBW Example code block below accepts a filter magnitude response, and retur
 
 .. -----------------------------------------------------|
 .. code-block:: python
+
     # ENBW Example 
     # Equivalent noise bandwidth of an arbitrary
     # filter, given frequency response magnitude
