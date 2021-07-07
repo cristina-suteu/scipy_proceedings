@@ -354,7 +354,7 @@ A sensor’s datasheet may specify a low output impedance (often close to zero o
 
    Conceptual Sensor with Buffered Output. Noise is buffered along with the signal.
 
-There are numerous other sensor limitations - mechanical, chemical, optical, each with their own theoretical limits and whose effects can be modelled and compensated for later. But noise is the one imperfection that that cannot. 
+There are numerous other sensor limitations - mechanical, chemical, optical, each with their own theoretical limits and whose effects can be modelled and compensated for later. But noise is the one imperfection that cannot. 
 
 A Laboratory Noise Source
 -------------------------
