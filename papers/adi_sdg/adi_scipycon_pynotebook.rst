@@ -14,7 +14,7 @@ Using Python for Analysis and Verification of Mixed-mode Signal Chains
 
 .. class:: abstract
 
-Accurate, precise, and low-noise sensor measurements are essential before any machine can learn about (or artificial-intelligently make decisions about) the physical world. Modern, highly integrated data acquisition devices can often be directly connected to sensor outputs, performing analog signal conditioning, digitization, and digital filtering on a single silicon device, greatly simplifying system electronics. However, a complete understanding of the signal chain's noise sources and noise limiting filters is still required to extract maximum performance from and debug these modern devices.
+Accurate, precise, and low-noise sensor measurements are the cornerstone of technical advances. Modern, highly integrated data acquisition devices can often be directly connected to sensor outputs, performing analog signal conditioning, digitization, and digital filtering on a single silicon device, greatly simplifying system electronics. However, a complete understanding of the signal chain's noise sources and noise limiting filters is still required to extract maximum performance from and debug these modern devices.
 
 
 Introduction
@@ -22,9 +22,9 @@ Introduction
 
 Mixed-mode signal chains are everywhere. Simply put, any system that transforms a real-world signal to an electrical equivalent, which is then digitized can be classified as a mixed-mode signal chain. At every point along the chain the signal is degraded in various ways that can usually be characterized either as some form of distortion or additive noise. Once in the digital domain, the processing of the digitized data is not perfect either, but at least it is, for all practical purposes, immune to many of the offenders that affect analog signals - component tolerances, temperature drift, interference from adjacent signals or supply voltage variations.
 
-As the industry continues to push the physical limits, one thing that can be stated with certainty is this: there is always room for improvement in analog and mixed signal components for instrumentation. If an ADC or a Digital to Analog Converter (DAC) appears on the market that advances the state of the art in speed, noise, power, accuracy, or price, industry will happily apply it to existing problems, then ask for more improvement. However, in order to achieve the best acquisition system for your application, it is fundamental to be aware of the components' limitations and choose these accordingly. 
+As the industry continues to push the physical limits, one thing that can be stated with certainty is this: there is always room for improvement in analog and mixed signal components for instrumentation. If an Analog to Digital Converter (ADC) or a Digital to Analog Converter (DAC) appears on the market that advances the state of the art in speed, noise, power, accuracy, or price, industry will happily apply it to existing problems, then ask for more improvement. However, in order to achieve the best acquisition system for your application, it is fundamental to be aware of the components' limitations and choose these accordingly. 
 
-This paper details the analysis and verification of such a signal acquisition system, focusing on noise. Individual signal chain elements will first be modelled in LTspice and Python / SciPy, then verified using Python to drive low-cost instrumentation and evaluation boards via the Linux IIO framework. While primarily for the education space, these instruments have adequate performance for many industrial applications. Furthermore, these techniques can easily be adapted to other bench-top instruments.
+This paper details the analysis and verification of such a signal acquisition system, focusing on noise. Individual signal chain elements will first be modelled with the help of Python / SciPy [1]_  and LTspice [2]_ , then verified using Python to drive low-cost instrumentation and evaluation boards via the Linux Industrial Input Output (IIO) framework. While primarily for the education space, these instruments have adequate performance for many industrial applications. Furthermore, these techniques can easily be adapted to other bench-top instruments.
 
 A Generic Mixed Signal Chain
 ----------------------------
@@ -36,18 +36,18 @@ Figure :ref:`mixmode` shows a generic signal chain typical of a precision instru
    A Generic Mixed Mode Signal Chain.
    :label:`mixmode`
 
-If the sensor’s signal will eventually reside on, or at least take a trip through a computer, an ADC will be involved somewhere along the way. There are numerous background references on analog to digital converters available [1]_ , and most readers will have a sense that an analog to digital converter samples an input signal at some point in time (or measures the average of a signal over some observation time), and produces a numerical representation of that signal - most often as a binary number with some value between zero and :math:`2^N - 1` where N is the number of bits in the output word.
+If the sensor’s signal will eventually reside on, or at least take a trip through a computer, an ADC will be involved somewhere along the way. There are numerous background references on analog to digital converters available [3]_ , and most readers will have a sense that an analog to digital converter samples an input signal at some point in time (or measures the average of a signal over some observation time), and produces a numerical representation of that signal - most often as a binary number with some value between zero and :math:`2^N - 1` where math:`N` is the number of bits in the output word.
 
 ADC Noise Sources
 ---------------------------------------------------------
 
-While there are several noise sources in Figure :ref:`mixmode`, one that is often either ignored, or over-emphasized, is the number of bits in the ADC's digital output. Historically, an ADC's "number of bits" was considered the ultimate figure of merit, where a 16-bit converter was obviously 4 times better than a 14-bit converter [2]_ . But in the case of modern, high-resolution converters, the “number of bits” can be safely ignored. Note a general principle of signal chain design:
+While there are several noise sources in Figure :ref:`mixmode`, one that is often either ignored, or over-emphasized, is the number of bits in the ADC's digital output. Historically, an ADC's "number of bits" was considered the ultimate figure of merit, where a 16-bit converter was 4 times better than a 14-bit converter [4]_ . But in the case of modern, high-resolution converters, the "number of bits" can be safely ignored. Note a general principle of signal chain design:
 
 “The input noise of one stage should be somewhat lower than the output noise of the preceding stage”
 
-As with any signal chain, one noise source within an ADC often dominates. Thus, if a noiseless signal is applied an N-bit ADC:
+As with any signal chain, one noise source within an ADC often dominates. Thus, if a noiseless signal is applied to an N-bit ADC:
 
--  results in either a single output code, or two adjacent output codes, then **quantization noise dominates**. The Signal to Noise Ratio can be no greater than (6.02 N + 1.76) dB. [3]_ 
+-  results in either a single output code, or two adjacent output codes, then **quantization noise dominates**. The Signal to Noise Ratio can be no greater than (6.02 N + 1.76) dB. [5]_ 
 -  results in a gaussian distribution of “many” output codes, then a **thermal noise source dominates**. The Signal to Noise Ratio is no greater than: 
 
    :math:`20\log(V_{in}(p-p)/(\sigma/\sqrt{8}))`, where:
@@ -56,18 +56,18 @@ As with any signal chain, one noise source within an ADC often dominates. Thus, 
 
    :math:`\sigma` is the standard deviation of the output codes in units of voltage.
 
-Very high resolution converters, such as the AD7124-8 that will be used as an example shortly, are rarely limited by quantization noise; thermal noise dominates in all of the gain / bandwidth settings, and a shorted input will always produce a fairly Gaussian distribution of output codes. Figure :ref:`ad7124hist` [4]_  below shows the grounded-input histogram of the AD712482, 24-bit sigma-delta ADC, with the internal amplifier gain set to 1 and 128, respectively. At a gain of 1, 13 codes are represented, and the standard deviation is about 2.5 codes.
+Very high resolution converters, such as the AD7124-8 that will be used as an example shortly, are rarely limited by quantization noise; thermal noise dominates in all of the gain / bandwidth settings, and a shorted input will always produce a fairly Gaussian distribution of output codes. Figure :ref:`ad7124hist` , from Ref. [6]_  shows the grounded-input histogram of the AD712482, 24-bit sigma-delta ADC, with the internal amplifier gain set to 1 and 128, respectively. At a gain of 1, 13 codes are represented, and the standard deviation is about 2.5 codes.
 
 .. figure:: ad7124_histograms.png
    :scale: 30 %
 
-   AD7124 output noise. PGA-gain=1 (left), PGA-gain=128 (right).
+   AD7124 output noise. PGA-gain=1 (left), PGA-gain=128 (right), as per Ref. [6]_ .
    :label:`ad7124hist`
 
 Experimental Setup
 --------------------------------
 
-Figure :ref:`hwsetup` shows the general setup for testing ADC noise and filter response [5]_  . The ADALM2000 (M2K) is a multifunction USB test instrument with two general-purpose analog inputs and two outputs, with sample rates of 100MSPS and 150MSPS, respectively. A Raspberry Pi 4 running a kernel with AD7124 device driver support acts as a simple bridge between the AD7124 and a host computer. 
+Figure :ref:`hwsetup` shows the general setup for testing ADC noise and filter response [7]_  . The ADALM2000 (M2K) is a multifunction USB test instrument with two general-purpose analog inputs and two outputs, with sample rates of 100MSPS and 150MSPS, respectively. A Raspberry Pi 4 running a kernel with AD7124 device driver support acts as a simple bridge between the AD7124 and a host computer. 
 
 .. figure:: full_setup_overview.png
    :scale: 40 %
@@ -78,7 +78,7 @@ Figure :ref:`hwsetup` shows the general setup for testing ADC noise and filter r
 Modeling and Measuring ADC noise
 --------------------------------
 
-Modeling the noise of a thermal-noise limited ADC’s is straightforward. If the noise is “well behaved” (Gaussian, as it is in Figure :ref:`ad7124hist`) and constant across the ADC’s input span, the ADC’s time-domain noise can be modelled using Numpy’s [6]_  random.normal function, then verified by taking the standard deviation, as seen in the Model Gaussian Noise code block below:
+Modeling the noise of a thermal-noise limited ADC’s is straightforward. If the noise is “well behaved” (Gaussian, as it is in Figure :ref:`ad7124hist`) and constant across the ADC’s input span, the ADC’s time-domain noise can be modelled using Numpy’s [8]_  :code:`random.normal function` , then verified by taking the standard deviation, as seen in the Model Gaussian Noise code block.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -92,7 +92,7 @@ Modeling the noise of a thermal-noise limited ADC’s is straightforward. If the
     measured_noise = np.std(noise)
     print("Measured Noise: ", measured_noise)
 
-The AD7124 device driver falls under the industry-standard Industrial Input-Output (IIO) framework, which has a well-established software API (including Python bindings). Application code can run locally (on the Pi) or on a remote machine via network, serial, or USB connection. Furthermore, the pyadi-iio [7]_  abstraction layer takes care of much of the boilerplate setup required for interfacing with IIO devices, greatly simplifying the software interface. The AD7124-8 Basic Data Capture code block illustrates how to open a connection to the AD7124-8, configure it, capture a block of data, then close the connection.
+The AD7124 device driver falls under the industry-standard Industrial Input-Output (IIO) framework, which has a well-established software API (including Python bindings). Application code can run locally (on the Pi) or on a remote machine via network, serial, or USB connection. Furthermore, the pyadi-iio [9]_  abstraction layer takes care of much of the boilerplate setup required for interfacing with IIO devices, greatly simplifying the software interface. The AD7124-8 Basic Data Capture code block illustrates how to open a connection to the AD7124-8, configure it, capture a block of data, then close the connection.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -144,7 +144,7 @@ The "wandering" can be due to a number of factors - the internal reference warmi
    Noise after warmup.
    :label:`ad7124noise`
 
-Typical noise under these conditions is about 565nVRMS - on par with the datasheet [4]_  noise specification.
+Typical noise under these conditions is about 565nVRMS - on par with the datasheet [6]_  noise specification.
 
 Expressing ADC Noise as a Density
 ---------------------------------
@@ -153,11 +153,7 @@ Any part used when building a signal acquisition system will contaminate the ori
 
 ADC datasheets typically do not include a noise density specification, but expressing the ADC's noise as a density allows it to be directly compared to the noise at the output of the last element in the analog signal chain, which may be an ADC driver stage, a gain stage, and the sensor itself.
 
-An ADC’s internal noise will necessarily appear somewhere between DC and half the sample rate. Ideally this noise is flat, or at least predictably shaped. In fact, since the ADC’s total noise is spread out across a known bandwidth, it can be converted to a noise density that can be directly compared to other elements in the signal chain. Precision converters typically have total noise given directly, in volts RMS:
-
-:math:`e_{RMS} = \sigma`
-
-where:
+An ADC’s internal noise will necessarily appear somewhere between DC and half the sample rate. Ideally this noise is flat, or at least predictably shaped. In fact, since the ADC’s total noise is spread out across a known bandwidth, it can be converted to a noise density that can be directly compared to other elements in the signal chain. Precision converters typically have total noise given directly, in volts RMS: :math:`e_{RMS} = \sigma` , where:
 
 :math:`e_{RMS}` is the total RMS noise, calculated from the standard deviation of a grounded-input histogram of codes.
 
@@ -195,13 +191,13 @@ This can be used as a guideline for optimizing amplifier gain:
 
 “Increase signal chain gain just to the point where the noise of the last stage before the ADC is a bit higher than the ADC noise… then **STOP**. Don’t bother increasing the signal chain gain any more - you’re just amplifying noise, and decreasing the allowable range of inputs”
 
-This runs counter to historical advice to “fill” the ADC’s input range. There may be benefit to using more of an ADC’s input range IF there are steps or discontinuities in the ADC’s transfer function, but for “well behaved” ADCs (most sigma delta ADCs and modern, high-resolution Successive Approximation Register (SAR) ADCs), optimizing by noise is the preferred approach.
+This runs counter to historical advice to “fill” the ADC’s input range. There may be benefit to using more of an ADC’s input range if there are steps or discontinuities in the ADC’s transfer function, but for “well behaved” ADCs (most sigma delta ADCs and modern, high-resolution Successive Approximation Register (SAR) ADCs), optimizing by noise is the preferred approach.
 
 
 Measuring ADC filter response
 -----------------------------
 
-The AD7124-8 is a sigma-delta ADC, in which a modulator produces a high sample rate, but noisy (low resolution), representation of the analog input. This noisy data is then filtered by an internal digital filter, producing a lower rate, lower noise output. The type of filter varies from ADC to ADC, depending on the intended end application. The AD7124-8 is general-purpose, targeted at precision applications. As such, the digital filter response and output data rate are highly configurable. While the filter response is well-defined in the datasheet, there are occasions when one may want to measure the impact of the filter on a given signal. The code below measures the filter response by applying sinewaves to the ADC input and analyzing the output. This method can be easily adapted to measuring other waveforms - wavelets, simulated physical events. The ADALM2000 is connected to the AD7124-8 circuit as shown in Figure :ref:`ad7124m2k`. The 1k resistor is to protect the AD7124-8 in case something goes wrong, as the m2k output range is -5V to +5V, beyond the -0.3V to 3.6V absolute maximum limits of the converter.
+The AD7124-8 is a sigma-delta ADC, in which a modulator produces a high sample rate, but noisy (low resolution), representation of the analog input. This noisy data is then filtered by an internal digital filter, producing a lower rate, lower noise output. The type of filter varies from ADC to ADC, depending on the intended end application. The AD7124-8 is general-purpose, targeted at precision applications. As such, the digital filter response and output data rate are highly configurable. While the filter response is well-defined in the datasheet, there are occasions when one may want to measure the impact of the filter on a given signal. The AD7124-8 Filter Response code block measures the filter response by applying sinewaves to the ADC input and analyzing the output. This method can be easily adapted to measuring other waveforms - wavelets, simulated physical events. The ADALM2000 is connected to the AD7124-8 circuit as shown in Figure :ref:`ad7124m2k`. The 1k resistor is to protect the AD7124-8 in case something goes wrong, as the m2k output range is -5V to +5V, beyond the -0.3V to 3.6V absolute maximum limits of the converter.
 
 .. figure:: ad7124_m2k_circuit.png
    :scale: 40 %
@@ -252,7 +248,7 @@ The ability to measure an ADC’s filter response is a practical tool for bench 
 
 Note that what follows is only a model of the AD7124-8 filters, it is not a bit-accurate representation. Refer to the AD7124-8 datasheet for all guaranteed parameters.
 
-Figures :ref:`10hznotch` [4]_  and :ref:`50hznotch` [4]_  show the AD7124-8’s 10Hz and 50Hz notch filters. Various combinations of Higher order SINC3 and SINC4 filters are also available.
+Figures :ref:`10hznotch` and :ref:`50hznotch`, both from Ref. [6]_  show the AD7124-8’s 10Hz and 50Hz notch filters. Various combinations of Higher order SINC3 and SINC4 filters are also available.
 
 .. figure:: ad7124_filter_10.png
    :scale: 50 %
@@ -266,7 +262,7 @@ Figures :ref:`10hznotch` [4]_  and :ref:`50hznotch` [4]_  show the AD7124-8’s 
    AD7124 50Hz notch filter.
    :label:`50hznotch`
 
-SINC filters (with a frequency response proportional to :math:`(sin{f}/f)^N` are fairly easy to construct when nulls are known. The simultaneous 50Hz/60Hz rejection filter shown in Figure :ref:`5060hzflt` [4]_ is a nontrivial example.
+SINC filters (with a frequency response proportional to :math:`(sin{f}/f)^N` are fairly easy to construct when nulls are known. The simultaneous 50Hz/60Hz rejection filter shown in Figure :ref:`5060hzflt` , from Ref. [6]_ is a nontrivial example.
 
 .. figure:: simult_50_60_reverse_eng.png
    :scale: 50 %
@@ -274,7 +270,7 @@ SINC filters (with a frequency response proportional to :math:`(sin{f}/f)^N` are
    AD7124-8 50/60Hz rejection filter. 
    :label:`5060hzflt`
 
-Higher order SINC filters can be generated by convolving SINC1 filters. For example, convolving two SINC1 filters (with a rectangular impulse response in time) will result in a SINC2 response, with a triangular impulse response. The AD7124 Filters code block generates a SINC3 filter with a null at 50Hz, then adds a fourth filter with a null at 60Hz, as seen in the AD7124 Filters code block below:
+Higher order SINC filters can be generated by convolving SINC1 filters. For example, convolving two SINC1 filters (with a rectangular impulse response in time) will result in a SINC2 response, with a triangular impulse response. The AD7124 Filters code block generates a SINC3 filter with a null at 50Hz, then adds a fourth filter with a null at 60Hz, as seen in the AD7124 Filters code block.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -306,7 +302,7 @@ The resulting impulse (time domain) shapes of the filters are shown in Figure :r
    Generated Filter Impulse Responses.
    :label:`fltimpluse`
 
-And finally, the frequency response can be calculated using NumPy’s [6]_  freqz function, as seen in the AD7124 Frequency Response code block. The response is shown in Figure :ref:`fltresp`.
+And finally, the frequency response can be calculated using NumPy’s  freqz function, as seen in the AD7124 Frequency Response code block. The response is shown in Figure :ref:`fltresp`.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -331,7 +327,7 @@ And finally, the frequency response can be calculated using NumPy’s [6]_  freq
 Resistance is Futile: A Fundamental Sensor Limitation
 -----------------------------------------------------
 
-All sensors, no matter how perfect, have some maximum input value (and a corresponding maximum output - which may be a voltage, current, resistance, or even dial position) and a finite noise floor - “wiggles” at the output that exist even if the input is perfectly still. At some point, a sensor with an electrical output will include an element with a finite resistance (or more generally, impedance) represented by Rsensor in the diagram below. This represents one fundamental noise limit that cannot be improved upon - this resistance will produce, at a minimum:
+All sensors, no matter how perfect, have some maximum input value (and a corresponding maximum output - which may be a voltage, current, resistance, or even dial position) and a finite noise floor - “wiggles” at the output that exist even if the input is perfectly still. At some point, a sensor with an electrical output will include an element with a finite resistance (or more generally, impedance) represented by Rsensor in Figure :ref:`generic_sensor` This represents one fundamental noise limit that cannot be improved upon - this resistance will produce, at a minimum:
 
 :math:`e_n(RMS) = \sqrt{4 * K * T * Rsensor * (F2-F1)}` Volts of noise,
 where:
@@ -353,6 +349,7 @@ A sensor’s datasheet may specify a low output impedance (often close to zero o
    :scale: 80 %
 
    Conceptual Sensor with Buffered Output. Noise is buffered along with the signal.
+   :label:`generic_sensor`
 
 There are numerous other sensor limitations - mechanical, chemical, optical, each with their own theoretical limits and whose effects can be modelled and compensated for later. But noise is the one imperfection that cannot. 
 
@@ -372,7 +369,7 @@ The OP482 is an ultralow bias current amplifier with correspondingly low current
    Laboratory Noise Source.
    :label:`ananoisesrc`
 
-The noise source was verified with an ADALM2000 USB instrument, using the Scopy [8]_  GUI’s spectrum analyzer, shown in Figure :ref:`ngoutput`.
+The noise source was verified with an ADALM2000 USB instrument, using the Scopy [10]_  GUI’s spectrum analyzer, shown in Figure :ref:`ngoutput`.
 
 .. figure:: resistor_based_noise_source_nsd_scopy.png
    :scale: 50 %
@@ -380,9 +377,9 @@ The noise source was verified with an ADALM2000 USB instrument, using the Scopy 
    Noise Generator Output.
    :label:`ngoutput`
 
-Under the analyzer settings shown, the ADALM2000 noise floor is <<40µV/:math:`\sqrt{Hz}`, well below the 1.27 mV/:math:`\sqrt{Hz}`>> of the noise source.
+Under the analyzer settings shown, the ADALM2000 noise floor is :math:`<<` 40µV/:math:`\sqrt{Hz}`, well below the 1.27 mV/:math:`\sqrt{Hz}` :math:`>>` of the noise source.
 
-While Scopy is useful for single, visual measurements, the functionality can be replicated easily with the scipy.signal.periodogram [9]_  function. Raw data is collected from an ADALM2000 using the libm2k [10]_  and Python bindings, minimally processed to remove DC content (that would otherwise “leak” into low frequency bins), and scaled to nV/:math:`\sqrt{Hz}`. This method, shown in the Noise Source Measurement code block can be applied to any data acquisition module, so long as the sample rate is fixed and known, and data can be formatted as a vector of voltages.
+While Scopy is useful for single, visual measurements, the functionality can be replicated easily with the scipy.signal.periodogram function. Raw data is collected from an ADALM2000 using the libm2k [11]_  and Python bindings, minimally processed to remove DC content (that would otherwise “leak” into low frequency bins), and scaled to nV/:math:`\sqrt{Hz}`. This method, shown in the Noise Source Measurement code block can be applied to any data acquisition module, so long as the sample rate is fixed and known, and data can be formatted as a vector of voltages.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -406,7 +403,7 @@ We are now armed with a known noise source and a method to measure said source, 
 Modeling Signal Chains in LTspice
 ---------------------------------
 
-LTspice [11]_  is a freely available, general-purpose analog circuit simulator that can be applied to signal chain design. It can perform transient analysis, frequency-domain analysis (AC sweep), and noise analysis, the results of which can be exported and incorporated into mixed signal models using Python.
+LTspice  is a freely available, general-purpose analog circuit simulator that can be applied to signal chain design. It can perform transient analysis, frequency-domain analysis (AC sweep), and noise analysis, the results of which can be exported and incorporated into mixed signal models using Python.
 
 Figure :ref:`ngltspice` shows a noise simulation of the analog noise generator, with close agreement to experimental results. An op-amp with similar properties to the OP482 was used for the simulation.
 
@@ -416,7 +413,7 @@ Figure :ref:`ngltspice` shows a noise simulation of the analog noise generator, 
    LTspice model of Laboratory Noise Source.
    :label:`ngltspice`
 
-Figure :ref:`ngltspice` ciruit’s noise is fairly trivial to model, given that it is constant for some bandwidth (in which a signal of interest would lie), above which it rolls off with approximately a first order lowpass response. Where this technique comes in handy is modeling non-flat noise floors, either due to higher order analog filtering, or active elements themselves. The classic example is the “noise mountain” that often exists in autozero amplifiers such as the LTC2057, as seen in figure :ref:`ltc2057nsd` [12]_ .
+Figure :ref:`ngltspice` ciruit’s noise is fairly trivial to model, given that it is constant for some bandwidth (in which a signal of interest would lie), above which it rolls off with approximately a first order lowpass response. Where this technique comes in handy is modeling non-flat noise floors, either due to higher order analog filtering, or active elements themselves. The classic example is the “noise mountain” that often exists in autozero amplifiers such as the LTC2057, as seen in Figure :ref:`ltc2057nsd` , from Ref. [12]_ .
 
 .. figure:: inputvoltage_noise_spectrum.png
    :scale: 30 %
@@ -424,7 +421,6 @@ Figure :ref:`ngltspice` ciruit’s noise is fairly trivial to model, given that 
    LTC2057 noise spectrum. 
    :label:`ltc2057nsd`
 
-While that mountain looks daunting, it may not be a problem if it is suppressed in either the analog or digital domains.
 
 Importing LTspice noise data for frequency domain analysis in Python is a matter of setting up the simulation command such that exact
 frequencies in the analysis vector are simulated. In this case, the noise simulation is set up for a simulation with a maximum frequency of 2.048MHz and resolution of 62.5Hz , corresponding to the first Nyquist zone at a sample rate of 4.096 MSPS. Figure :ref:`ltc2057ltspicensd` shows the simulation of the LT2057 in a non-inverting gain of 10, simulation output, and exported data format.
@@ -435,7 +431,7 @@ frequencies in the analysis vector are simulated. In this case, the noise simula
    LTC2057, G=+10 output noise simulation.
    :label:`ltc2057ltspicensd`
 
-In order to determine the impact of a given band of noise on a signal (signal to noise ratio) the noise is root-sum-square integrated across the bandwidth of interest. In LTspice, plotted parameters can be integrated by setting the plot limits, then control-clicking the parameter label. The total noise over the entire 2.048MHz simulation is 32µVRMS. A function to implement this operation in Python is shown in the Integrate Power Spectral Density code block below.
+In order to determine the impact of a given band of noise on a signal (signal to noise ratio) the noise is root-sum-square integrated across the bandwidth of interest. In LTspice, plotted parameters can be integrated by setting the plot limits, then control-clicking the parameter label. The total noise over the entire 2.048MHz simulation is 32µVRMS. A function to implement this operation in Python is shown in the Integrate Power Spectral Density code block. 
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -480,15 +476,13 @@ Expanding on the functionality of the purely analog noise generator above, it is
                                  (np.flip(freq), 1)))
       r_spectrum_rnd_ph = r_s_full * rnd_ph_full
       r_time_full = np.fft.ifft(r_spectrum_rnd_ph)
-  #    print("RMS imaginary component: ",
-  #          np.std(np.imag(r_time_full)),
-  #          " Should be close to nothing")
+
       if (density == True):
           #Note that this N is "predivided" by 2
           r_time_full *= N*np.sqrt(fs/(N))
       return(np.real(r_time_full))
 
-This function can be verified by controlling one ADALM2000 through a libm2k [10]_  script, and verifying the noise profile with a second ADALM2000 and the spectrum analyzer in the Scopy [8]_  GUI. The Push Noise Time-series to ADALM2000 code snippet generates four "bands" of 1mV/:math:`\sqrt{Hz}` noise on the ADALM2000 W2 output (with a sinewave on W1, for double-checking functionality.)
+This function can be verified by controlling one ADALM2000 through a libm2k script, and verifying the noise profile with a second ADALM2000 and the spectrum analyzer in the Scopy GUI. The Push Noise Time-series to ADALM2000 code snippet generates four "bands" of 1mV/:math:`\sqrt{Hz}` noise on the ADALM2000 W2 output (with a sinewave on W1, for double-checking functionality.)
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -514,8 +508,7 @@ This function can be verified by controlling one ADALM2000 through a libm2k [10]
     aout.push(buffer)
 	
 
-Figure :ref:`m2k-noise-bands` below shows four bands of 1mV/:math:`\sqrt{Hz}` noise being generated by one ADALM2000. The input vector is 8192 points long at a sample rate of 75ksps, for a bandwidth of 9.1Hz per point. Each “band” is 512 points, or 4687Hz wide.
-
+Figure :ref:`m2k-noise-bands` shows four bands of 1mV/:math:`\sqrt{Hz}` noise being generated by one ADALM2000. The input vector is 8192 points long at a sample rate of 75ksps, for a bandwidth of 9.1Hz per point. Each “band” is 512 points, or 4687Hz wide.
 The rolloff above ~20kHz is the SINC rolloff of the DAC. If the DAC is capable of a higher sample rate, the time series data can be upsampled and filtered by an interpolating filter. [13]_ 
 
 .. figure:: m2k_noise_bands.png
@@ -541,7 +534,7 @@ where:
 
 fc is the cutoff frequency of the filter. If broadband noise, from “DC to daylight”, is applied to the inputs of both a 1KHz, first-order lowpass filter and 1.57kHz brickwall lowpass filter, the total noise power at the outputs will be the same.
 
-The ENBW Example code block below accepts a filter magnitude response, and returns the effective noise bandwidth. A single-pole filter’s magnitude response is calculated, and used to verify the ENBW = :math:`fc*pi/2` relationship.
+The ENBW Example code block accepts a filter magnitude response, and returns the effective noise bandwidth. A single-pole filter’s magnitude response is calculated, and used to verify the ENBW = :math:`fc*pi/2` relationship.
 
 .. -----------------------------------------------------|
 .. code-block:: python
@@ -575,7 +568,7 @@ The ENBW Example code block below accepts a filter magnitude response, and retur
 
 This function can be used to calculate the ENBW of an arbitrary filter response, including the AD7124's internal filters. The frequency response of the AD7124 SINC4 filter, 128sps sample rate can be calculated similar to the previous 50/60Hz rejection filter example. The arb_anbw function returns a ENBW of about 31Hz.
 
-The ADALM2000 noise generator can be used to validate this result. Setting the test noise generator to generate a band of 1000µV/:math:`\sqrt{Hz}` should result in a total noise of about 5.69mVRMS, and measured results are approximately 5.1mVRMS total noise. The oscilloscope capture of the ADC input signal is plotted next to the ADC output data below, in figure :ref:`noiseblast` Note the measured peak-to-peak noise of 426mV, while the ADC peak-to-peak noise is about 26mV. While such a high noise level is (hopefully) unrealistic in an actual precision signal chain, this exercise demonstrates that the the ADC’s internal filter can be relied on to act as the primary bandwidth limiting, and hence noise reducing, element in a signal chain.
+The ADALM2000 noise generator can be used to validate this result. Setting the test noise generator to generate a band of 1000µV/:math:`\sqrt{Hz}` should result in a total noise of about 5.69mVRMS, and measured results are approximately 5.1mVRMS total noise. The oscilloscope capture of the ADC input signal is plotted next to the ADC output data, in Figure :ref:`noiseblast` . Note the measured peak-to-peak noise of 426mV, while the ADC peak-to-peak noise is about 26mV. While such a high noise level is (hopefully) unrealistic in an actual precision signal chain, this exercise demonstrates that the the ADC’s internal filter can be relied on to act as the primary bandwidth limiting, and hence noise reducing, element in a signal chain.
 
 
 .. figure:: ad7124_noise_blast.png
@@ -602,31 +595,31 @@ Acknowledgements
 References
 ----------
 
-.. [1] Smith, Steven W,
+.. [1] Pauli Virtanen, Ralf Gommers et al. (2020) SciPy 1.0: Fundamental Algorithms for Scientific Computing in               			Python. Nature Methods, 17(3), 261-272.
+.. [2] LTspcice
+        <https://www.analog.com/en/design-center/design-tools-and-calculators/ltspice-simulator.html i>
+.. [3] Smith, Steven W,
        *The Scientist & Engineer's Guide to Digital Signal Processing*
        <https://www.analog.com/en/education/education-library/scientist_engineers_guide.html>
-.. [2] Man, Ching,
+.. [4] Man, Ching,
        *Quantization Noise: An Expanded Derivation of the Equation, SNR = 6.02 N + 1.76*
        <https://www.analog.com/media/en/training-seminars/tutorials/MT-229.pdf>
-.. [3] Kester, Walt,
+.. [5] Kester, Walt,
        *Taking the Mystery out of the Infamous Formula, "SNR = 6.02N + 1.76dB"*
        Analog Devices Tutorial, 2009.
        <https://www.analog.com/media/en/training-seminars/tutorials/MT-001.pdf>
-.. [4] AD7124 Datasheet
+.. [6] AD7124 Datasheet
        <https://www.analog.com/media/en/technical-documentation/data-sheets/ad7124-8.pdf>
-.. [5] Active Learning Tutorial: Converter Connectivity Tutorial
+.. [7] Active Learning Tutorial: Converter Connectivity Tutorial
        <https://wiki.analog.com/university/labs/software/iio_intro_toolbox>
-.. [6] Charles R. Harris, K. Jarrod Millman, et al. Array programming with NumPy, Nature, 585, 357–362 (2020)
+.. [8] Charles R. Harris, K. Jarrod Millman, et al. Array programming with NumPy, Nature, 585, 357–362 (2020)
        <DOI:10.1038/s41586-020-2649-2>
-.. [7] pyadi-iio
+.. [9] pyadi-iio
         <https://wiki.analog.com/resources/tools-software/linux-software/pyadi-iio>
-.. [8] Scopy
+.. [10] Scopy
         <https://wiki.analog.com/university/tools/m2k/scopy>
-.. [9] Pauli Virtanen, Ralf Gommers et al. (2020) SciPy 1.0: Fundamental Algorithms for Scientific Computing in               			Python. Nature Methods, 17(3), 261-272.
-.. [10] Libm2k
+.. [11] Libm2k
         <https://wiki.analog.com/university/tools/m2k/libm2k/libm2k>
-.. [11] LTspcice
-        <https://www.analog.com/en/design-center/design-tools-and-calculators/ltspice-simulator.html i>
 .. [12] LTC2057 Datasheet
         <https://www.analog.com/media/en/technical-documentation/data-sheets/2057f.pdf>
 .. [13] Kester, Walt,
